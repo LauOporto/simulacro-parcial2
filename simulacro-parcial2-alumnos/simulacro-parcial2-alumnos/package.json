@@ -1,0 +1,19 @@
+{
+  "name": "simulacro-parcial2-desmotadora",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simulacro del segundo parcial — Programación IV, UTN FRRe",
+  "main": "src/servidor.js",
+  "scripts": {
+    "start": "node src/servidor.js",
+    "test": "node --test",
+    "cargar": "node scripts/cargar.js",
+    "token": "node scripts/token.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

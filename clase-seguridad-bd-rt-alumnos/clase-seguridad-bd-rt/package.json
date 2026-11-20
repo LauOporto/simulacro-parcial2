@@ -1,0 +1,9 @@
+{
+  "name": "clase-seguridad-bd-tiempo-real",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Programación IV · UTN FRRe · Rate limiting, ReDoS, STRIDE, bases de datos y tiempo real",
+  "engines": { "node": ">=22.13" },
+  "scripts": { "lab": "node --test --test-force-exit --test-reporter=spec --disable-warning=ExperimentalWarning laboratorio/pruebas.test.js" },
+  "dependencies": { "express": "^5.1.0", "socket.io": "^4.8.0", "socket.io-client": "^4.8.0" }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "clase-streams",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Programación IV — Streams: un reporte que crece en 4 pasos",
+  "scripts": {
+    "preparar": "node preparar.js",
+    "lab": "node --test --expose-gc --test-timeout=8000 --test-force-exit laboratorio/subidas.test.js"
+  }
+}
