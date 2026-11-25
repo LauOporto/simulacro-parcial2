@@ -13,6 +13,27 @@ const redondear = (x) => Math.round(x * 100) / 100;
 // Importante: se redondea sólo al final. Las cuentas intermedias usan los valores sin redondear.
 function liquidar({ litros, grasa, temperatura, clase }) {
   // TODO
+  let litrosEq = litros
+  PRECIO_LITRO.clase
+
+  if (grasa > GRASA_BASE) {
+  litrosEq = litros * grasa / GRASA_BASE
+  }
+
+  let bruto = litrosEq * PRECIO_LITRO[clase]
+  let descuentoFrio = 0
+
+  if (temperatura > TEMPERATURA_MAXIMA) {
+    descuentoFrio = bruto * DESCUENTO_FRIO
+  }
+
+  let importe = bruto - descuentoFrio
+
+  litrosEq = redondear(litrosEq)
+  descuentoFrio = redondear(descuentoFrio)
+  importe = redondear(importe)
+
+  return { litrosEq, descuentoFrio, importe }
 }
 
 module.exports = { liquidar, GRASA_BASE, TEMPERATURA_MAXIMA, DESCUENTO_FRIO, PRECIO_LITRO, redondear };

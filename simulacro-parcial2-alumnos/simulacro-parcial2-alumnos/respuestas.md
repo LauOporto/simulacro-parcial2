@@ -82,16 +82,58 @@ Pregunta qué le llega al cliente si una API responde res.json con un valor así
 
 PARTE TEORICA
 
-T1
-(a) -> 401. Se utiliza cuando no se añade el encabezado del token
-(b) -> 403. El token es valido sin embargo si es de consulta no deberia poder realiza un POST
-(c) -> 400. El pedido no se puede leer
-(d) -> 422. El recurso no es valido
-(e) -> 429. Se solicitaron demasiados recursos.
+**T1 — Códigos de estado.**
 
-T2
+(a) `GET /entregas` sin `Authorization` → **401** `no-autenticado`. El servidor no sabe quién es el cliente, porque no mandó token. No es 403: el 403 supone que ya sé quién sos y que solo te falta permiso.
 
+(b) `POST /entregas` con token válido de rol `consulta` → **403** `sin-permiso`. El token es válido, así que el servidor sabe quién es, pero el rol `consulta` solo puede leer. No es 401: la identidad está bien y mandar de nuevo el mismo token no lo arregla.
 
+(c) `POST` con JSON cortado a la mitad → **400** `json-invalido`. El body ni siquiera se puede parsear: `express.json()` falla antes de llegar a la validación. No es 422 porque no hay contenido para validar.
+
+(d) `POST` con JSON válido pero `"kgBrutos": "11000"` → **422** `entrega-invalida`, `campo: "kgBrutos"`. El JSON se leyó bien, pero `"11000"` es un string y la regla pide tipo number. No es 400 porque la sintaxis está bien: lo que falla es la regla.
+
+(e) `GET /entregas?limite=500` → **400** `parametro-invalido`, `campo: "limite"`. El enunciado dice que `limite` tiene que ser un entero entre 1 y 50, y cualquier otra cosa es 400. No es 429: el 429 es por hacer demasiados pedidos en poco tiempo (rate limit), no por pedir una página grande. Tampoco se recorta a 50 en silencio.
+
+- **400 vs 422:** 400 es que no se puede leer el pedido (sintaxis); 422 es que se leyó bien pero el contenido no cumple las reglas.
+- **401 vs 403:** 401 es "no sé quién sos" (falta token o es inválido); 403 es "sé quién sos, pero no tenés permiso".
+
+**T2 — JWT.**
+
+Un JWT tiene 3 partes: header, payload (`sub`, `rol`, `exp`) y firma. El header y el payload están en base64url, que es una codificación, no un cifrado: cualquiera puede leerlos **y escribirlos**. Lo único que protege al token es la firma, que se calcula con el `SECRETO` que solo tiene el servidor. Si se cambia una letra del payload, la firma deja de coincidir.
+
+(a) La línea propuesta solo **lee** el payload y nunca verifica la firma. Cualquiera puede escribir un payload `{"sub":"ana","rol":"operador"}`, ponerle una firma inventada, y el servidor le cree. Eso permite hacerse pasar por otro usuario (suplantación) y darse el rol `operador` (escalada de privilegios), por ejemplo para cargar camiones falsos. Además no mira `exp`, así que el token nunca vence.
+
+(b) `"alg": "none"` significa "este token no tiene firma". Si el servidor hiciera lo que dice el header, un atacante pondría `none`, dejaría la firma vacía y el servidor se saltearía la verificación: es el mismo ataque que en (a). El header lo escribe el atacante, así que no se puede confiar en él para decidir cómo verificar. Por eso `verificarToken` fija el algoritmo (solo acepta `HS256`) y rechaza cualquier otro.
+
+(c) Que la firma sea válida prueba que el servidor emitió el token y que nadie lo modificó, pero **no** que siga vigente. Si roban un token, sin `exp` serviría para siempre. Como JWT es stateless, el servidor no guarda sesiones y no tiene cómo "anular" un token. `exp` limita el daño: un token robado o con un rol viejo sirve como mucho 1 hora.
+
+**T3 — Idempotencia.**
+
+1. Tal como está, el reintento llega como un `POST` nuevo y el servidor no puede saber que es el mismo camión, así que crea una **segunda entrega**. Al productor se le liquida dos veces el mismo algodón, y esa plata la pierde la **desmotadora**. La balanza no puede saber si el primer pedido llegó: lo único que vio fue el corte.
+
+2. La balanza genera una clave única por camión (un UUID) y la manda en `Idempotency-Key`. Si reintenta, manda la misma. Por cada clave, el servidor guarda: la **huella del body** (un hash SHA-256), el **estado** (`en proceso` o `terminado`) y la **respuesta** que dio (status y body).
+   - Si llega una clave repetida, ya terminada y con la misma huella, el servidor devuelve **la misma respuesta guardada** (el mismo 201) sin crear otra entrega.
+   - Si la clave es la misma pero la huella no coincide, el cliente reutilizó la clave con otros datos. Se responde **422**. Sin la huella, el servidor diría "ok" y esos datos nuevos se perderían en silencio.
+   - Si la clave todavía está `en proceso`, se responde **409 Conflict** (con `Retry-After`). Por eso la clave se guarda como `en proceso` **antes** de procesar: si no, dos pedidos simultáneos crearían dos entregas.
+
+3. `PUT /entregas/123` significa "dejá el recurso 123 así". El id lo elige el cliente, y repetirlo deja el mismo estado, así que es idempotente. `POST /entregas` significa "creá uno nuevo": el servidor genera otro id en cada repetición, así que cada reintento es otra entrega.
+
+**T4 — Streams.**
+
+`req` es un stream: el CSV no llega entero, llega en pedazos (chunks) de unos 64 KB. `req.on("data", ...)` se ejecuta con cada pedazo y `req.on("end", ...)` cuando ya no llegan más. El compañero pega todos los pedazos en `texto`, así que termina con **los 2 GB enteros en RAM**. El proceso se queda sin memoria (un string en Node ni siquiera puede llegar a 2 GB) y se cae. Como Node atiende todo en **un solo proceso**, se caen también todos los pedidos que estaba atendiendo. Y aunque no se caiga, `procesar(texto)` sobre un texto gigante bloquea el proceso, así que los demás pedidos quedan esperando.
+
+**Contrapresión (backpressure):** la red puede traer datos más rápido de lo que el disco los escribe. Si nadie frena, lo que no se llegó a escribir se acumula en memoria. La contrapresión es que el destino lento le avise al origen "pará", y después "seguí" cuando se libera. Así en memoria solo hay unos pocos chunks, sin importar el tamaño del archivo.
+
+`pipeline(req, fs.createWriteStream(destino))` conecta la entrada con el archivo y maneja la contrapresión sola. Si el cliente corta a la mitad, `pipeline` cierra todos los streams y avisa con un error. En ese caso se **borra el archivo a medio escribir** y no se responde 201. Con `req.pipe` a mano el error no se propaga y queda un archivo incompleto que parece válido. El **201** se responde recién cuando `pipeline` termina sin error, es decir, cuando el último byte ya está escrito en disco:
+
+```js
+try {
+  await pipeline(req, fs.createWriteStream(destino));
+  res.status(201).end();
+} catch {
+  await fs.promises.rm(destino, { force: true });
+}
+```
 
 ---
 
