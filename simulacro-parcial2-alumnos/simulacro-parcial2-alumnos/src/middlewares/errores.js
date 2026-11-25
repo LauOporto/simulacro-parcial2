@@ -18,14 +18,19 @@ function manejarErrores(err, req, res, next) {
       instance: req.originalUrl,
       ...err.extra,
     }));
+  } else if (err.status === 400) {
+    return res.status(err.status).type("application/problem+json").send(JSON.stringify({
+      type: `${BASE}/json-invalido`,
+      title: "Los datos enviados son invalidos",
+      status: err.status,
+      instance: req.originalUrl
+    }))
   }
-
-  res.status(500).type("application/problem+json").send(JSON.stringify({
+    console.error(err)
+    res.status(500).type("application/problem+json").send(JSON.stringify({
     type: `${BASE}/interno`,
     title: "Error interno",
-    status: 500,
-    detail: err.message,
-    stack: err.stack,
+    status: 500
   }));
 }
 

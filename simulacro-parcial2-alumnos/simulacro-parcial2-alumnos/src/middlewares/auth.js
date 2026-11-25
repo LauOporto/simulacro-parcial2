@@ -10,26 +10,28 @@ const { Problema } = require("../errores/problema");
 function autenticar(req, res, next) {
   const encabezado = req.get("Authorization");
   if (!encabezado) {
-    res.status(401).type("application/problem+json").send(JSON.stringify({
-      type: "https://desmotadora.ejemplo.edu/problemas/no-autenticado",
-      title: "Falta el token",
-      status: 401,
-    }));
-  }
-
+    // res.status(401).type("application/problem+json").send(JSON.stringify({
+    //   type: "https://desmotadora.ejemplo.edu/problemas/no-autenticado",
+    //   title: "Falta el token",
+    //   status: 401,
+    throw new Problema(401,"no-autenticado","Falta el token")
+    }
+  // ))
+  ;
+  
   const token = encabezado?.replace("Bearer ", "");
   try {
     req.usuario = verificarToken(token);
   } catch (err) {
-    console.warn("token inválido:", err.message);
+    throw new Problema(401, "no-autenticado", "token-invalido");
   }
   next();
-}
+  }
 
 function permitir(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.usuario?.rol)) {
-      return next(new Problema(401, "no-autenticado", "No autorizado"));
+      return next(new Problema(403, "sin-permiso", "token-valido"));
     }
     next();
   };

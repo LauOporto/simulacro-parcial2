@@ -23,9 +23,9 @@ function validarEntrega(body) {
     }
 
     if (body.productor.length < 3) {
-      throw invalida("Productor","El nombre del productor debe ser mayor a 3 caracteres")
+      throw invalida("productor","El nombre del productor debe ser mayor a 3 caracteres")
     } else if (body.productor.length > 60) {
-      throw invalida("Productor","El nombre del productor debe ser menor a 60 caracteres")
+      throw invalida("productor","El nombre del productor debe ser menor a 60 caracteres")
     } {
       body.productor = body.productor.trim()
     }
@@ -40,19 +40,19 @@ function validarEntrega(body) {
   }
 
   if (!(body.rendimiento >= 28 && body.rendimiento <= 40)) {
-    throw invalida("Rendimiento", "El rendimiento debe ser entre 28 y 40%")
+    throw invalida("rendimiento", "El rendimiento debe ser entre 28 y 40%")
   }
 
   if (!(body.humedad >= 0 && body.humedad <= 30)) {
-    throw invalida("Humedad", "La humedad debe ser entre 0 y 30%")
+    throw invalida("humedad", "La humedad debe ser entre 0 y 30%")
   }
 
   if (!(body.grado === "A" || body.grado === "B" || body.grado === "C")) {
-    throw invalida("Grado", "El grado debe ser A, B o C")
+    throw invalida("grado", "El grado debe ser A, B o C")
   }
 
 
-  return { body: productor, body: kgBrutos, body: humedad, body: rendimiento, body:grado }
+  return { productor: body.productor, kgBrutos: body.kgBrutos, humedad:body.humedad, rendimiento: body.rendimiento, grado:body.grado }
 
 }
 
